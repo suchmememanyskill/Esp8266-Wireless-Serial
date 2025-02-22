@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+            body:not(.connected) > .connected,
+            body:not(.connecting) > .connecting,
+            body:not(.setup) > .setup
+            {
+                display: none;
+            }
+
+            #recv p 
+            {
+                margin: 4px 0px;
+            }
+
+            html
+            {
+                height: 100%;
+                background-color: #222;
+            }
+
+            body
+            {
+                margin: 0;
+                height: 100%;
+            }
+
+            div.setup
+            {
+                margin: 8px;
+            }
+
+            main 
+            {
+                height: calc(100% - 16px);
+                padding: 8px;
+                display: flex;
+                flex-direction: column;
+            }
+
+            #recv 
+            {
+                flex-grow: 1;
+                overflow-y: scroll;
+            }
+
+            #recv .sent::before
+            {
+                content: "-> ";
+            }
+
+            #recv .received::before
+            {
+                content: "<- ";
+            }
+
+            #recv .received#partialLine
+            {
+                color: darkgoldenrod;
+            }
+
+            #recv .received#partialLine::before
+            {
+                content: "... ";
+            }
+
+            #send 
+            {
+                display: flex;
+                flex-direction: row;
+                gap: 10px;
+            }
+
+            div.connecting,
+            label,
+            p
+            {
+                color: whitesmoke;
+            }
+
+            #recv p
+            {
+                font-family: 'Courier New', Courier, monospace;
+                overflow-wrap: break-word;
+            }
+
+            p#displayBaud
+            {
+                margin: 0;
+            }
+
+            p#displayBaud::before 
+            {
+                content: 'Current Baud: ';
+            }
+
+            #input 
+            {
+                flex-grow: 1;
+            }
+
+        </style>
+        <script>
+            //ws = new WebSocket("ws://localhost:9001/");
+            let host = window.location.host;
+            if (!host.endsWith(":80"))
+            {
+                host += ":80";
+            }
+            ws = new WebSocket("ws://" + host +"/ws");
+            let partial = "";
+
+            ws.onopen = function() {
+                console.log("Open");
+                ws.send(JSON.stringify({"action": "info"}));
+            };
+
+            ws.onmessage = function(e) {
+                data = JSON.parse(e.data);
+                
+                if (data.action === "info")
+                {
+                    if (data.active === true)
+                    {
+                        document.getElementById("displayBaud").innerText = data.baud
+                        document.body.className = "connected";
+                    }
+                    else 
+                    {
+                        document.body.className = "setup";
+                    }
+                }
+                else if (data.action == "data")
+                {
+                    const lines = data.data.split("\n");
+                    const recv = document.getElementById("recv");
+                    let partialElement = document.getElementById("partialLine");
+
+                    for (const [i, line] of lines.entries()) 
+                    {
+                        if (i > 0 && partialElement != null)
+                        {
+                            partialElement.removeAttribute('id')
+                            partialElement = null;
+                        }
+
+                        if (partialElement != null)
+                        {
+                            partial += line;
+                            partialElement.innerText = partial;
+                        }
+                        else if (data.data)
+                        {
+                            partialElement = document.createElement("p");
+                            partialElement.classList.add("received");
+                            recv.appendChild(partialElement);
+                            partial = line;
+                            partialElement.setAttribute("id", "partialLine");
+                            partialElement.innerText = partial;
+                            recv.scrollTo(0, recv.scrollHeight);
+                        }
+                    }
+                }
+            };
+
+            ws.onclose = function() {
+                console.log("Closed");
+                document.body.className = "connecting";
+            };
+
+            ws.onerror = function(e) {
+                console.log(e);
+                document.body.className = "connecting";
+            };
+
+            function onClickBaudrateSend()
+            {
+                const value = parseInt(document.getElementById('baud').value);
+
+                if (value <= 0)
+                {
+                    return;
+                }
+
+                const send = JSON.stringify({
+                    'action': 'connect', 
+                    'baud': value
+                });
+
+                ws.send(send);
+            }
+
+            function onClickSend()
+            {
+                const value = document.getElementById('input').value;
+                
+                if (!value)
+                {
+                    return;
+                }
+
+                const send = JSON.stringify({
+                    'action': 'send', 
+                    'data': value
+                });
+
+                ws.send(send); 
+                document.getElementById('input').value = '';
+                const elem = document.createElement("p");
+                recv.appendChild(elem);
+                elem.classList.add("sent");
+                elem.innerText = value;
+                recv.scrollTo(0, recv.scrollHeight);
+            }
+
+            function onClickCloseSerial()
+            {
+                const send = JSON.stringify({
+                    'action': 'disconnect'
+                });
+
+                ws.send(send);
+            }
+
+            window.onload = function()
+            {
+                document.getElementById("baud").addEventListener("keypress", function(event) {
+                    if (event.key === "Enter") {
+                        event.preventDefault();
+                        onClickBaudrateSend();
+                    }
+                });
+
+                document.getElementById("input").addEventListener("keypress", function(event) {
+                    if (event.key === "Enter") {
+                        event.preventDefault();
+                        onClickSend();
+                    }
+                });
+            }
+
+        </script>
+    </head>
+    <body class="connecting">
+        <div class="connecting">
+            Connecting...
+        </div>
+        <div class="setup">
+            <label for="baud">Baudrate</label>
+            <input type="number" name="baud" id="baud" value="9600" />
+            <button onclick="onClickBaudrateSend()">Send</button>
+        </div>
+        <main class="connected">
+            <div id="recv"></div>
+            <div id="send">
+                <input type="text" id="input" />
+                <button onclick="onClickSend()">Send</button>
+                <button onclick="onClickCloseSerial()">Close Serial</button>
+                <p id="displayBaud"></p>
+            </div>
+        </main>
+    </body>
+</html>
