@@ -10,8 +10,9 @@ Small application that sends received serial data to a webbrowser, and lets a we
 
 ### Usage
 
-1. Connect to the WiFi AP
 ![Image of wifi network named WirelessSerial](./readme/wifi.png)
+
+1. Connect to the WiFi AP
 1. Go to the host IP (For me this was [http://192.168.4.1](http://192.168.4.1))
 1. Set the baud rate, and you should be ready to send and recieve messages!
 
